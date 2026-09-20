@@ -213,6 +213,17 @@ export class ConversationController {
       },
     });
 
+    // Asynchronously sync outbound message to Salesforce as Task
+    dbStore.getSalesforceIntegration().then((integ) => {
+      if (integ && integ.status === 'CONNECTED' && integ.autoSyncMessages) {
+        import('../../../lib/salesforce/service').then(({ SalesforceSyncService }) => {
+          SalesforceSyncService.syncMessageToSalesforce(message.id).catch((sfErr) => {
+            console.warn('[Salesforce Auto-Sync Outbound Message Error]', sfErr);
+          });
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+
     res.status(201).json({
       success: sendResult.success,
       data: message,

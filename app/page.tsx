@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { InboxView } from './components/InboxView';
 import { DashboardView } from './components/DashboardView';
 import { ContactsView } from './components/ContactsView';
+import { SalesforceView } from './components/SalesforceView';
 import { AgentsView } from './components/AgentsView';
 import { SimulatorView } from './components/SimulatorView';
 import { SettingsView } from './components/SettingsView';
@@ -146,6 +147,8 @@ export default function Home() {
               }}
             />
           )}
+
+          {activeTab === 'salesforce' && <SalesforceView />}
 
           {activeTab === 'agents' && <AgentsView currentUser={currentUser} />}
 

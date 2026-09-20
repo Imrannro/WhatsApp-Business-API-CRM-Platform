@@ -35,6 +35,9 @@ export interface Contact {
   avatarUrl?: string | null;
   tags: string[];
   notes?: string | null;
+  salesforceId?: string | null;
+  salesforceType?: 'Contact' | 'Lead' | null;
+  salesforceSyncAt?: string | null;
   lastInteraction: string;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +53,8 @@ export interface Conversation {
   priority: Priority;
   subject?: string | null;
   unreadCount: number;
+  salesforceCaseId?: string | null;
+  salesforceSyncAt?: string | null;
   lastMessageAt: string;
   createdAt: string;
   updatedAt: string;
@@ -67,6 +72,8 @@ export interface Message {
   recipientPhone?: string | null;
   metadata?: Record<string, unknown> | null;
   errorMessage?: string | null;
+  salesforceTaskId?: string | null;
+  salesforceSyncAt?: string | null;
   timestamp: string;
   createdAt: string;
   updatedAt: string;
@@ -127,4 +134,58 @@ export interface DashboardStats {
   recentConversations: Conversation[];
   recentActivity: AuditLog[];
   dailyMessageTrends: { date: string; inbound: number; outbound: number }[];
+}
+
+export type SalesforceEnvironment = 'production' | 'sandbox';
+export type SalesforceSyncDirection = 'OUTBOUND' | 'INBOUND' | 'BIDIRECTIONAL';
+export type SalesforceSyncStatus = 'SUCCESS' | 'FAILED' | 'PARTIAL';
+export type SalesforceTargetObject = 'Contact' | 'Lead' | 'Both';
+
+export interface SalesforceIntegration {
+  id: string;
+  instanceUrl: string;
+  accessToken: string;
+  refreshToken?: string | null;
+  tokenType: string;
+  issuedAt?: string | null;
+  userId?: string | null;
+  orgId?: string | null;
+  userEmail?: string | null;
+  userName?: string | null;
+  environment: SalesforceEnvironment;
+  clientId?: string | null;
+  clientSecret?: string | null;
+  autoSyncMessages: boolean;
+  autoSyncContacts: boolean;
+  targetObject: SalesforceTargetObject;
+  status: 'CONNECTED' | 'DISCONNECTED' | 'ERROR';
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SalesforceSyncLog {
+  id: string;
+  direction: SalesforceSyncDirection;
+  entityType: 'CONTACT' | 'LEAD' | 'MESSAGE' | 'CONVERSATION' | 'ALL';
+  status: SalesforceSyncStatus;
+  recordsProcessed: number;
+  recordsSynced: number;
+  recordsFailed: number;
+  durationMs: number;
+  error?: string | null;
+  details?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface SalesforceFieldMapping {
+  id: string;
+  entityType: 'Contact' | 'Lead';
+  localField: string;
+  salesforceField: string;
+  direction: 'LOCAL_TO_SF' | 'SF_TO_LOCAL' | 'BIDIRECTIONAL';
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

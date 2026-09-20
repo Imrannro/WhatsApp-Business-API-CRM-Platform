@@ -10,7 +10,10 @@ import {
   Role,
   ConversationStatus,
   MessageStatus,
-  MessageDirection
+  MessageDirection,
+  SalesforceIntegration,
+  SalesforceSyncLog,
+  SalesforceFieldMapping,
 } from './types';
 
 class MemoryStore {
@@ -21,6 +24,9 @@ class MemoryStore {
   private internalNotes: Map<string, InternalNote> = new Map();
   private webhookEvents: Map<string, WebhookEvent> = new Map();
   private auditLogs: AuditLog[] = [];
+  private salesforceIntegration: SalesforceIntegration | null = null;
+  private salesforceSyncLogs: SalesforceSyncLog[] = [];
+  private salesforceFieldMappings: Map<string, SalesforceFieldMapping> = new Map();
   private initialized = false;
 
   constructor() {
@@ -313,6 +319,94 @@ class MemoryStore {
         createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
       }
     );
+
+    // Initialize Default Salesforce Field Mappings
+    this.seedDefaultFieldMappings();
+  }
+
+  private seedDefaultFieldMappings() {
+    const defaultMappings: Omit<SalesforceFieldMapping, 'id' | 'createdAt' | 'updatedAt'>[] = [
+      {
+        entityType: 'Contact',
+        localField: 'name',
+        salesforceField: 'LastName',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Contact',
+        localField: 'phoneNumber',
+        salesforceField: 'Phone',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Contact',
+        localField: 'email',
+        salesforceField: 'Email',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Contact',
+        localField: 'company',
+        salesforceField: 'Department',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Contact',
+        localField: 'notes',
+        salesforceField: 'Description',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Lead',
+        localField: 'name',
+        salesforceField: 'LastName',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Lead',
+        localField: 'phoneNumber',
+        salesforceField: 'Phone',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Lead',
+        localField: 'email',
+        salesforceField: 'Email',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Lead',
+        localField: 'company',
+        salesforceField: 'Company',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+      {
+        entityType: 'Lead',
+        localField: 'notes',
+        salesforceField: 'Description',
+        direction: 'BIDIRECTIONAL',
+        isActive: true,
+      },
+    ];
+
+    defaultMappings.forEach((m, idx) => {
+      const id = `sf-map-${idx + 1}`;
+      this.salesforceFieldMappings.set(id, {
+        ...m,
+        id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    });
   }
 
   // --- Users ---
@@ -410,6 +504,71 @@ class MemoryStore {
     return null;
   }
 
+  public async findContactByEmail(email: string): Promise<Contact | null> {
+    const e = email.toLowerCase().trim();
+    for (const contact of this.contacts.values()) {
+      if (contact.email && contact.email.toLowerCase().trim() === e) {
+        return contact;
+      }
+    }
+    return null;
+  }
+
+  public async findContactBySalesforceId(sfId: string): Promise<Contact | null> {
+    for (const contact of this.contacts.values()) {
+      if (contact.salesforceId === sfId) {
+        return contact;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Comprehensive Duplicate Detection & Matching Engine:
+   * 1. Match by exact Salesforce ID
+   * 2. Match by normalized phone number (E.164 stripped)
+   * 3. Match by email address (case-insensitive)
+   * 4. Match by exact name + company combination
+   */
+  public async findMatchingContact(criteria: {
+    salesforceId?: string | null;
+    phoneNumber?: string | null;
+    email?: string | null;
+    name?: string | null;
+    company?: string | null;
+  }): Promise<{ contact: Contact; matchReason: 'SALESFORCE_ID' | 'PHONE' | 'EMAIL' | 'NAME_COMPANY' } | null> {
+    if (criteria.salesforceId) {
+      const match = await this.findContactBySalesforceId(criteria.salesforceId);
+      if (match) return { contact: match, matchReason: 'SALESFORCE_ID' };
+    }
+
+    if (criteria.phoneNumber) {
+      const match = await this.findContactByPhone(criteria.phoneNumber);
+      if (match) return { contact: match, matchReason: 'PHONE' };
+    }
+
+    if (criteria.email) {
+      const match = await this.findContactByEmail(criteria.email);
+      if (match) return { contact: match, matchReason: 'EMAIL' };
+    }
+
+    if (criteria.name && criteria.company) {
+      const n = criteria.name.toLowerCase().trim();
+      const comp = criteria.company.toLowerCase().trim();
+      for (const contact of this.contacts.values()) {
+        if (
+          contact.name.toLowerCase().trim() === n &&
+          contact.company &&
+          contact.company.toLowerCase().trim() === comp
+        ) {
+          return { contact, matchReason: 'NAME_COMPANY' };
+        }
+      }
+    }
+
+    return null;
+  }
+
   public async createContact(data: {
     phoneNumber: string;
     name: string;
@@ -418,6 +577,9 @@ class MemoryStore {
     tags?: string[];
     notes?: string | null;
     avatarUrl?: string | null;
+    salesforceId?: string | null;
+    salesforceType?: 'Contact' | 'Lead' | null;
+    salesforceSyncAt?: string | null;
   }): Promise<Contact> {
     const contact: Contact = {
       id: `cnt-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -428,6 +590,9 @@ class MemoryStore {
       tags: data.tags || [],
       notes: data.notes || null,
       avatarUrl: data.avatarUrl || null,
+      salesforceId: data.salesforceId || null,
+      salesforceType: data.salesforceType || null,
+      salesforceSyncAt: data.salesforceSyncAt || null,
       lastInteraction: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -638,6 +803,22 @@ class MemoryStore {
     return updated;
   }
 
+  public async findMessageById(id: string): Promise<Message | null> {
+    return this.messages.get(id) || null;
+  }
+
+  public async updateMessage(id: string, updates: Partial<Message>): Promise<Message | null> {
+    const msg = this.messages.get(id);
+    if (!msg) return null;
+    const updated: Message = {
+      ...msg,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.messages.set(id, updated);
+    return updated;
+  }
+
   // --- Internal Notes ---
   public async getInternalNotesByConversationId(conversationId: string): Promise<InternalNote[]> {
     return Array.from(this.internalNotes.values())
@@ -809,6 +990,147 @@ class MemoryStore {
       recentActivity: this.auditLogs.slice(0, 10),
       dailyMessageTrends,
     };
+  }
+
+  // --- Salesforce Integration Management ---
+  public async getSalesforceIntegration(): Promise<SalesforceIntegration | null> {
+    return this.salesforceIntegration;
+  }
+
+  public async saveSalesforceIntegration(
+    data: Partial<SalesforceIntegration> & { instanceUrl: string; accessToken: string }
+  ): Promise<SalesforceIntegration> {
+    const existing = this.salesforceIntegration;
+    const now = new Date().toISOString();
+
+    const integration: SalesforceIntegration = {
+      id: existing?.id || `sf-integ-${Date.now()}`,
+      instanceUrl: data.instanceUrl.replace(/\/$/, ''),
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken !== undefined ? data.refreshToken : existing?.refreshToken || null,
+      tokenType: data.tokenType || existing?.tokenType || 'Bearer',
+      issuedAt: data.issuedAt || existing?.issuedAt || now,
+      userId: data.userId !== undefined ? data.userId : existing?.userId || null,
+      orgId: data.orgId !== undefined ? data.orgId : existing?.orgId || null,
+      userEmail: data.userEmail !== undefined ? data.userEmail : existing?.userEmail || null,
+      userName: data.userName !== undefined ? data.userName : existing?.userName || null,
+      environment: data.environment || existing?.environment || 'production',
+      clientId: data.clientId !== undefined ? data.clientId : existing?.clientId || null,
+      clientSecret: data.clientSecret !== undefined ? data.clientSecret : existing?.clientSecret || null,
+      autoSyncMessages:
+        data.autoSyncMessages !== undefined ? data.autoSyncMessages : existing?.autoSyncMessages ?? true,
+      autoSyncContacts:
+        data.autoSyncContacts !== undefined ? data.autoSyncContacts : existing?.autoSyncContacts ?? true,
+      targetObject: data.targetObject || existing?.targetObject || 'Contact',
+      status: data.status || 'CONNECTED',
+      lastSyncAt: data.lastSyncAt !== undefined ? data.lastSyncAt : existing?.lastSyncAt || null,
+      lastError: data.lastError !== undefined ? data.lastError : null,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    this.salesforceIntegration = integration;
+    return integration;
+  }
+
+  public async updateSalesforceStatus(
+    status: 'CONNECTED' | 'DISCONNECTED' | 'ERROR',
+    error?: string | null
+  ): Promise<SalesforceIntegration | null> {
+    if (!this.salesforceIntegration) return null;
+    this.salesforceIntegration = {
+      ...this.salesforceIntegration,
+      status,
+      lastError: error !== undefined ? error : this.salesforceIntegration.lastError,
+      updatedAt: new Date().toISOString(),
+    };
+    return this.salesforceIntegration;
+  }
+
+  public async disconnectSalesforce(): Promise<boolean> {
+    if (!this.salesforceIntegration) return false;
+    this.salesforceIntegration = {
+      ...this.salesforceIntegration,
+      status: 'DISCONNECTED',
+      accessToken: '',
+      refreshToken: null,
+      lastError: null,
+      updatedAt: new Date().toISOString(),
+    };
+    return true;
+  }
+
+  // --- Salesforce Sync Logs ---
+  public async createSalesforceSyncLog(
+    data: Omit<SalesforceSyncLog, 'id' | 'createdAt'>
+  ): Promise<SalesforceSyncLog> {
+    const log: SalesforceSyncLog = {
+      id: `sf-log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      ...data,
+      createdAt: new Date().toISOString(),
+    };
+    this.salesforceSyncLogs.unshift(log);
+    if (this.salesforceSyncLogs.length > 200) {
+      this.salesforceSyncLogs.pop();
+    }
+    return log;
+  }
+
+  public async getSalesforceSyncLogs(limit = 50): Promise<SalesforceSyncLog[]> {
+    return this.salesforceSyncLogs.slice(0, limit);
+  }
+
+  public async clearSalesforceSyncLogs(): Promise<boolean> {
+    this.salesforceSyncLogs = [];
+    return true;
+  }
+
+  // --- Salesforce Field Mappings ---
+  public async getFieldMappings(entityType?: 'Contact' | 'Lead'): Promise<SalesforceFieldMapping[]> {
+    let list = Array.from(this.salesforceFieldMappings.values());
+    if (entityType) {
+      list = list.filter((m) => m.entityType === entityType);
+    }
+    return list;
+  }
+
+  public async createFieldMapping(
+    data: Omit<SalesforceFieldMapping, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<SalesforceFieldMapping> {
+    const id = `sf-map-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const mapping: SalesforceFieldMapping = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.salesforceFieldMappings.set(id, mapping);
+    return mapping;
+  }
+
+  public async updateFieldMapping(
+    id: string,
+    updates: Partial<Omit<SalesforceFieldMapping, 'id' | 'createdAt'>>
+  ): Promise<SalesforceFieldMapping | null> {
+    const mapping = this.salesforceFieldMappings.get(id);
+    if (!mapping) return null;
+    const updated: SalesforceFieldMapping = {
+      ...mapping,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.salesforceFieldMappings.set(id, updated);
+    return updated;
+  }
+
+  public async deleteFieldMapping(id: string): Promise<boolean> {
+    return this.salesforceFieldMappings.delete(id);
+  }
+
+  public async resetDefaultFieldMappings(): Promise<SalesforceFieldMapping[]> {
+    this.salesforceFieldMappings.clear();
+    this.seedDefaultFieldMappings();
+    return Array.from(this.salesforceFieldMappings.values());
   }
 }
 

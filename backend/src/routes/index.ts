@@ -5,6 +5,7 @@ import conversationRoutes from './conversation.routes';
 import webhookRoutes from './webhook.routes';
 import dashboardRoutes from './dashboard.routes';
 import userRoutes from './user.routes';
+import salesforceRoutes from './salesforce.routes';
 
 const apiRouter = Router();
 
@@ -14,5 +15,6 @@ apiRouter.use('/conversations', conversationRoutes);
 apiRouter.use('/webhooks', webhookRoutes);
 apiRouter.use('/dashboard', dashboardRoutes);
 apiRouter.use('/users', userRoutes);
+apiRouter.use('/salesforce', salesforceRoutes);
 
 export default apiRouter;

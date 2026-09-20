@@ -8,6 +8,9 @@ import {
   ConversationStatus,
   Priority,
   MessageStatus,
+  SalesforceIntegration,
+  SalesforceSyncLog,
+  SalesforceFieldMapping,
 } from '@/lib/db/types';
 
 export type {
@@ -20,12 +23,16 @@ export type {
   ConversationStatus,
   Priority,
   MessageStatus,
+  SalesforceIntegration,
+  SalesforceSyncLog,
+  SalesforceFieldMapping,
 };
 
 export type ActiveTab =
   | 'inbox'
   | 'dashboard'
   | 'contacts'
+  | 'salesforce'
   | 'agents'
   | 'simulator'
   | 'settings'

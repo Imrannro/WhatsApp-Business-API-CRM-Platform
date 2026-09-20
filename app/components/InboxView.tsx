@@ -24,6 +24,7 @@ import {
   X,
   Shield,
   HelpCircle,
+  Cloud,
 } from 'lucide-react';
 import {
   Conversation,
@@ -57,6 +58,7 @@ export const InboxView: React.FC<InboxViewProps> = ({ currentUser, onRefreshStat
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isSimulatingReply, setIsSimulatingReply] = useState<boolean>(false);
+  const [isSyncingSf, setIsSyncingSf] = useState<boolean>(false);
   const [newTagInput, setNewTagInput] = useState<string>('');
   const [showTemplatePicker, setShowTemplatePicker] = useState<boolean>(false);
 
@@ -237,6 +239,38 @@ export const InboxView: React.FC<InboxViewProps> = ({ currentUser, onRefreshStat
       onRefreshStats();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Failed to assign agent');
+    }
+  };
+
+  // Sync Contact to Salesforce
+  const handleSyncContactToSalesforce = async () => {
+    if (!activeConversation?.contact) return;
+    setIsSyncingSf(true);
+    try {
+      await apiClient.syncContactToSalesforce(activeConversation.contact.id);
+      await loadActiveConversationDetails(activeConversation.id);
+      await loadConversations();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Sync failed';
+      alert(`Salesforce Sync Error: ${msg}`);
+    } finally {
+      setIsSyncingSf(false);
+    }
+  };
+
+  // Sync Conversation to Salesforce Case
+  const handleSyncConversationToSalesforce = async () => {
+    if (!activeConversation) return;
+    setIsSyncingSf(true);
+    try {
+      await apiClient.syncConversationToSalesforce(activeConversation.id);
+      await loadActiveConversationDetails(activeConversation.id);
+      await loadConversations();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Case sync failed';
+      alert(`Salesforce Case Error: ${msg}`);
+    } finally {
+      setIsSyncingSf(false);
     }
   };
 
@@ -833,6 +867,67 @@ export const InboxView: React.FC<InboxViewProps> = ({ currentUser, onRefreshStat
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
+            </div>
+          </div>
+
+          {/* Salesforce CRM Integration Card */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Cloud className="w-3.5 h-3.5 text-blue-600" />
+                Salesforce CRM Record
+              </span>
+              {activeConversation.contact.salesforceId && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">
+                  {activeConversation.contact.salesforceType || 'Contact'}
+                </span>
+              )}
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-2 text-xs">
+              {activeConversation.contact.salesforceId ? (
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                    Salesforce Record ID
+                  </div>
+                  <div className="font-mono text-xs font-semibold text-blue-700 truncate select-all mt-0.5">
+                    {activeConversation.contact.salesforceId}
+                  </div>
+                  {activeConversation.contact.salesforceSyncAt && (
+                    <div className="text-[10px] text-slate-400 mt-1">
+                      Synced: {new Date(activeConversation.contact.salesforceSyncAt).toLocaleTimeString()}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-500">
+                  Not linked to Salesforce yet. Push to create new {activeConversation.contact.company ? 'Lead' : 'Contact'}.
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-1.5 pt-1">
+                <button
+                  onClick={handleSyncContactToSalesforce}
+                  disabled={isSyncingSf}
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px] flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+                >
+                  <Cloud className="w-3 h-3 text-blue-600" />
+                  {isSyncingSf
+                    ? 'Syncing...'
+                    : activeConversation.contact.salesforceId
+                    ? 'Re-Sync Salesforce Contact'
+                    : 'Push Contact to Salesforce'}
+                </button>
+
+                <button
+                  onClick={handleSyncConversationToSalesforce}
+                  disabled={isSyncingSf}
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium text-[11px] flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+                >
+                  <FileText className="w-3 h-3 text-slate-500" />
+                  {activeConversation.salesforceCaseId ? 'Update SF Case' : 'Log Conversation as SF Case'}
+                </button>
+              </div>
             </div>
           </div>
 

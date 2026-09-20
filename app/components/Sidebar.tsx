@@ -10,6 +10,7 @@ import {
   Settings,
   ShieldAlert,
   BookOpen,
+  Cloud,
 } from 'lucide-react';
 import { ActiveTab, User } from './types';
 
@@ -42,6 +43,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'contacts' as ActiveTab,
       label: 'Contacts CRM',
       icon: Users,
+    },
+    {
+      id: 'salesforce' as ActiveTab,
+      label: 'Salesforce CRM',
+      icon: Cloud,
+      badge: undefined,
     },
     {
       id: 'agents' as ActiveTab,

@@ -14,6 +14,8 @@ import {
   MessageSquare,
   X,
   Check,
+  Cloud,
+  RefreshCw,
 } from 'lucide-react';
 import { Contact } from './types';
 import { apiClient } from './apiClient';
@@ -27,6 +29,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
   const [search, setSearch] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [syncingContactId, setSyncingContactId] = useState<string | null>(null);
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -50,6 +53,19 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
       console.error('Error loading contacts:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSyncToSalesforce = async (contactId: string) => {
+    setSyncingContactId(contactId);
+    try {
+      await apiClient.syncContactToSalesforce(contactId);
+      await loadContacts();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Sync failed';
+      alert(`Salesforce Sync Error: ${msg}`);
+    } finally {
+      setSyncingContactId(null);
     }
   };
 
@@ -200,7 +216,16 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
                     <td className="py-3 px-4 text-slate-600">{contact.email || '—'}</td>
                     <td className="py-3 px-4 text-slate-600">{contact.company || '—'}</td>
                     <td className="py-3 px-4">
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {contact.salesforceId ? (
+                          <span
+                            title={`Synced to Salesforce ${contact.salesforceType || 'Record'}: ${contact.salesforceId}`}
+                            className="bg-blue-50 border border-blue-200 text-blue-700 text-[10px] px-2 py-0.5 rounded font-mono font-medium flex items-center gap-1"
+                          >
+                            <Cloud className="w-2.5 h-2.5 text-blue-600" />
+                            SF:{contact.salesforceId.slice(0, 7)}
+                          </span>
+                        ) : null}
                         {(contact.tags || []).map((t) => (
                           <span
                             key={t}
@@ -213,6 +238,14 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ onStartChatWithConta
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleSyncToSalesforce(contact.id)}
+                          disabled={syncingContactId === contact.id}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          title={contact.salesforceId ? 'Re-sync with Salesforce' : 'Push to Salesforce CRM'}
+                        >
+                          <Cloud className={`w-4 h-4 ${syncingContactId === contact.id ? 'animate-pulse' : ''}`} />
+                        </button>
                         <button
                           onClick={() => onStartChatWithContact(contact.id)}
                           className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"

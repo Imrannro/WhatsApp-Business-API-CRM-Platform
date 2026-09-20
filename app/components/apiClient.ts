@@ -197,4 +197,140 @@ export const apiClient = {
     const text = await res.text();
     return { status: res.status, ok: res.ok, body: text, challengeMatched: text === challenge };
   },
+
+  // Salesforce CRM Integration
+  async getSalesforceStatus() {
+    return this.fetch('/api/salesforce/status');
+  },
+
+  async getSalesforceAuthUrl(clientId?: string, redirectUri?: string, environment?: string) {
+    const q = new URLSearchParams();
+    if (clientId) q.set('clientId', clientId);
+    if (redirectUri) q.set('redirectUri', redirectUri);
+    if (environment) q.set('environment', environment);
+    return this.fetch(`/api/salesforce/auth-url?${q.toString()}`);
+  },
+
+  async handleSalesforceOAuthCallback(code: string, clientId?: string, clientSecret?: string, redirectUri?: string, environment?: string) {
+    return this.fetch('/api/salesforce/oauth/callback', {
+      method: 'POST',
+      body: JSON.stringify({ code, clientId, clientSecret, redirectUri, environment }),
+    });
+  },
+
+  async connectSalesforceDirect(data: {
+    instanceUrl: string;
+    accessToken: string;
+    refreshToken?: string;
+    environment?: 'production' | 'sandbox';
+    clientId?: string;
+    clientSecret?: string;
+    targetObject?: 'Contact' | 'Lead' | 'Both';
+    autoSyncMessages?: boolean;
+    autoSyncContacts?: boolean;
+  }) {
+    return this.fetch('/api/salesforce/connect-direct', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async disconnectSalesforce() {
+    return this.fetch('/api/salesforce/disconnect', {
+      method: 'POST',
+    });
+  },
+
+  async updateSalesforceSettings(data: {
+    autoSyncMessages?: boolean;
+    autoSyncContacts?: boolean;
+    targetObject?: 'Contact' | 'Lead' | 'Both';
+  }) {
+    return this.fetch('/api/salesforce/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async triggerSalesforceSync(entityType: 'CONTACT' | 'LEAD' | 'ALL' = 'ALL') {
+    return this.fetch('/api/salesforce/sync', {
+      method: 'POST',
+      body: JSON.stringify({ entityType }),
+    });
+  },
+
+  async syncContactToSalesforce(contactId: string) {
+    return this.fetch(`/api/salesforce/contacts/${contactId}/sync`, {
+      method: 'POST',
+    });
+  },
+
+  async syncMessageToSalesforce(messageId: string) {
+    return this.fetch(`/api/salesforce/messages/${messageId}/sync`, {
+      method: 'POST',
+    });
+  },
+
+  async syncConversationToSalesforce(conversationId: string) {
+    return this.fetch(`/api/salesforce/conversations/${conversationId}/sync`, {
+      method: 'POST',
+    });
+  },
+
+  async getSalesforceLogs(limit = 50) {
+    return this.fetch(`/api/salesforce/logs?limit=${limit}`);
+  },
+
+  async clearSalesforceLogs() {
+    return this.fetch('/api/salesforce/logs', {
+      method: 'DELETE',
+    });
+  },
+
+  async getSalesforceMappings(entityType?: 'Contact' | 'Lead') {
+    const q = entityType ? `?entityType=${entityType}` : '';
+    return this.fetch(`/api/salesforce/mappings${q}`);
+  },
+
+  async createSalesforceMapping(data: {
+    entityType: 'Contact' | 'Lead';
+    localField: string;
+    salesforceField: string;
+    direction?: 'INBOUND' | 'OUTBOUND' | 'BIDIRECTIONAL';
+    isActive?: boolean;
+  }) {
+    return this.fetch('/api/salesforce/mappings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateSalesforceMapping(id: string, data: {
+    salesforceField?: string;
+    localField?: string;
+    direction?: 'INBOUND' | 'OUTBOUND' | 'BIDIRECTIONAL';
+    isActive?: boolean;
+  }) {
+    return this.fetch(`/api/salesforce/mappings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteSalesforceMapping(id: string) {
+    return this.fetch(`/api/salesforce/mappings/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async resetSalesforceMappings() {
+    return this.fetch('/api/salesforce/mappings/reset', {
+      method: 'POST',
+    });
+  },
+
+  async describeSalesforceSObject(sobject: string) {
+    return this.fetch(`/api/salesforce/describe/${sobject}`);
+  },
 };
+

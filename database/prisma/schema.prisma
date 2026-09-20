@@ -83,6 +83,9 @@ model Contact {
   avatarUrl        String?
   tags             String[]       @default([])
   notes            String?
+  salesforceId     String?        @unique
+  salesforceType   String?        // 'Contact' | 'Lead'
+  salesforceSyncAt DateTime?
   lastInteraction  DateTime       @default(now())
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -90,6 +93,7 @@ model Contact {
 
   @@index([phoneNumber])
   @@index([name])
+  @@index([salesforceId])
   @@index([lastInteraction])
 }
 
@@ -103,6 +107,8 @@ model Conversation {
   priority         Priority                 @default(MEDIUM)
   subject          String?
   unreadCount      Int                      @default(0)
+  salesforceCaseId String?
+  salesforceSyncAt DateTime?
   lastMessageAt    DateTime                 @default(now())
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
@@ -113,6 +119,7 @@ model Conversation {
   @@index([contactId])
   @@index([assignedAgentId])
   @@index([status])
+  @@index([salesforceCaseId])
   @@index([lastMessageAt])
   @@index([createdAt])
 }
@@ -130,6 +137,8 @@ model Message {
   recipientPhone    String?
   metadata          Json?
   errorMessage      String?
+  salesforceTaskId  String?          // Logged Salesforce Task/Activity ID
+  salesforceSyncAt  DateTime?
   timestamp         DateTime         @default(now())
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
@@ -138,6 +147,7 @@ model Message {
   @@index([whatsappMessageId])
   @@index([direction])
   @@index([status])
+  @@index([salesforceTaskId])
   @@index([timestamp])
   @@index([createdAt])
 }
@@ -201,4 +211,63 @@ model AuditLog {
   @@index([action])
   @@index([resource])
   @@index([createdAt])
+}
+
+model SalesforceIntegration {
+  id                 String    @id @default(uuid())
+  instanceUrl        String
+  accessToken        String
+  refreshToken       String?
+  tokenType          String    @default("Bearer")
+  issuedAt           String?
+  userId             String?   // Salesforce User ID
+  orgId              String?   // Salesforce Organization ID
+  userEmail          String?
+  userName           String?
+  environment        String    @default("production") // 'production' | 'sandbox'
+  clientId           String?
+  clientSecret       String?
+  autoSyncMessages   Boolean   @default(true)
+  autoSyncContacts   Boolean   @default(true)
+  targetObject       String    @default("Contact") // 'Contact' | 'Lead' | 'Both'
+  status             String    @default("CONNECTED") // 'CONNECTED' | 'DISCONNECTED' | 'ERROR'
+  lastSyncAt         DateTime?
+  lastError          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([status])
+  @@index([orgId])
+}
+
+model SalesforceSyncLog {
+  id               String    @id @default(uuid())
+  direction        String    // 'OUTBOUND' | 'INBOUND' | 'BIDIRECTIONAL'
+  entityType       String    // 'CONTACT' | 'LEAD' | 'MESSAGE' | 'CONVERSATION' | 'ALL'
+  status           String    // 'SUCCESS' | 'FAILED' | 'PARTIAL'
+  recordsProcessed Int       @default(0)
+  recordsSynced    Int       @default(0)
+  recordsFailed    Int       @default(0)
+  durationMs       Int       @default(0)
+  error            String?
+  details          Json?
+  createdAt        DateTime  @default(now())
+
+  @@index([direction])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SalesforceFieldMapping {
+  id              String    @id @default(uuid())
+  entityType      String    // 'Contact' | 'Lead'
+  localField      String
+  salesforceField String
+  direction       String    @default("BIDIRECTIONAL") // 'LOCAL_TO_SF' | 'SF_TO_LOCAL' | 'BIDIRECTIONAL'
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([entityType, localField, salesforceField])
+  @@index([entityType])
 }

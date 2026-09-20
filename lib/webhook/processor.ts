@@ -175,6 +175,19 @@ export async function processWhatsAppWebhook(
             await dbStore.markWebhookProcessed(wamid);
             result.messagesHandled++;
 
+            // Trigger Salesforce Auto-Sync asynchronously if configured
+            dbStore.getSalesforceIntegration().then((integ) => {
+              if (integ && integ.status === 'CONNECTED') {
+                if (integ.autoSyncMessages) {
+                  import('../salesforce/service').then(({ SalesforceSyncService }) => {
+                    SalesforceSyncService.syncMessageToSalesforce(createdMsg.id).catch((sfErr) => {
+                      console.warn('[Salesforce Auto-Sync Inbound Message Error]', sfErr);
+                    });
+                  }).catch(() => {});
+                }
+              }
+            }).catch(() => {});
+
             await dbStore.createAuditLog({
               action: 'INBOUND_MESSAGE_RECEIVED',
               resource: 'Message',
