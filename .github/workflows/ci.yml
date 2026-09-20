@@ -1,0 +1,60 @@
+name: Continuous Integration & Test Suite
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-and-build:
+    name: Backend Tests & Build Verification
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: whatsapp_crm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Run Database Migrations & Generate Client
+        run: |
+          npx prisma generate --schema=database/prisma/schema.prisma
+
+      - name: Execute Vitest Integration Suite (Auth, CRM, Webhook, WhatsApp)
+        run: npx vitest run
+        env:
+          NODE_ENV: test
+          PORT: 3000
+          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/whatsapp_crm_test?schema=public
+          JWT_SECRET: ci-test-secret-key-12345
+          WHATSAPP_PROVIDER: mock
+          META_VERIFY_TOKEN: whatsapp_webhook_secret_token_123
+
+      - name: Build Backend & Next.js Production Bundles
+        run: npm run build
+        env:
+          NODE_ENV: production
+          JWT_SECRET: ci-test-secret-key-12345

@@ -1,0 +1,204 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  AUDIO
+  VIDEO
+  TEMPLATE
+  LOCATION
+  INTERACTIVE
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id                    String                   @id @default(uuid())
+  email                 String                   @unique
+  passwordHash          String
+  name                  String
+  role                  Role                     @default(AGENT)
+  status                UserStatus               @default(ACTIVE)
+  avatarUrl             String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  assignedConversations Conversation[]           @relation("AssignedAgent")
+  assignments           ConversationAssignment[]
+  internalNotes         InternalNote[]
+  auditLogs             AuditLog[]
+
+  @@index([email])
+  @@index([role, status])
+}
+
+model Contact {
+  id               String         @id @default(uuid())
+  phoneNumber      String         @unique
+  name             String
+  email            String?
+  company          String?
+  avatarUrl        String?
+  tags             String[]       @default([])
+  notes            String?
+  lastInteraction  DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  conversations    Conversation[]
+
+  @@index([phoneNumber])
+  @@index([name])
+  @@index([lastInteraction])
+}
+
+model Conversation {
+  id               String                   @id @default(uuid())
+  contactId        String
+  contact          Contact                  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignedAgentId  String?
+  assignedAgent    User?                    @relation("AssignedAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  status           ConversationStatus       @default(OPEN)
+  priority         Priority                 @default(MEDIUM)
+  subject          String?
+  unreadCount      Int                      @default(0)
+  lastMessageAt    DateTime                 @default(now())
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  messages         Message[]
+  internalNotes    InternalNote[]
+  assignments      ConversationAssignment[]
+
+  @@index([contactId])
+  @@index([assignedAgentId])
+  @@index([status])
+  @@index([lastMessageAt])
+  @@index([createdAt])
+}
+
+model Message {
+  id                String           @id @default(uuid())
+  conversationId    String
+  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  whatsappMessageId String?          @unique
+  direction         MessageDirection
+  type              MessageType      @default(TEXT)
+  body              String
+  status            MessageStatus    @default(SENT)
+  senderPhone       String?
+  recipientPhone    String?
+  metadata          Json?
+  errorMessage      String?
+  timestamp         DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([conversationId])
+  @@index([whatsappMessageId])
+  @@index([direction])
+  @@index([status])
+  @@index([timestamp])
+  @@index([createdAt])
+}
+
+model ConversationAssignment {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy     String
+  assignedAt     DateTime     @default(now())
+
+  @@index([conversationId])
+  @@index([userId])
+}
+
+model InternalNote {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([conversationId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique
+  eventType   String
+  payload     Json
+  processed   Boolean  @default(false)
+  error       String?
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+
+  @@index([eventId])
+  @@index([eventType])
+  @@index([receivedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}

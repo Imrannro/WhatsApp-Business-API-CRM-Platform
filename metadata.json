@@ -1,0 +1,6 @@
+{
+  "name": "WhatsApp Business API & CRM Platform",
+  "description": "Production-ready WhatsApp Business Cloud API integration and Helpdesk CRM with automated webhook processing, agent inbox, and full DevOps pipeline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
